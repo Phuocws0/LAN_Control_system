@@ -60,9 +60,17 @@ public class FileServer {
                     byte[] buffer = new byte[4096];
                     int bytesRead;
                     long totalRead = 0;
+                    int lastPercent = 0;
                     while (totalRead < fileSize && (bytesRead = dis.read(buffer)) != -1) {
                         fos.write(buffer, 0, bytesRead);
                         totalRead += bytesRead;
+
+                        // Tính toán phần trăm (%)
+                        int currentPercent = (int) ((totalRead * 100) / fileSize);
+                        if (currentPercent > lastPercent) {
+                            lastPercent = currentPercent;
+                            System.out.println(">> [FileServer] Đang nhận: " + fileName + " (" + currentPercent + "%)");
+                        }
                     }
                 }
                 System.out.println(">> [FileServer] Đã nhận file: " + targetFile.getAbsolutePath());

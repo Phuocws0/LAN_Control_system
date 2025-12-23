@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<VBox prefHeight="600.0" prefWidth="800.0" spacing="10.0" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.lancontrol.server.gui.FileExplorerController">
+    <padding><Insets bottom="15.0" left="15.0" right="15.0" top="15.0" /></padding>
+    <children>
+        <HBox spacing="10.0" alignment="CENTER_LEFT">
+            <children>
+                <Button text="⬅ Quay lại" onAction="#onBack" />
+                <TextField fx:id="pathField" HBox.hgrow="ALWAYS" promptText="Đường dẫn: C:\" />
+                <Button text="Truy cập" onAction="#onGoToPath" />
+            </children>
+        </HBox>
+
+        <TableView fx:id="fileTable" VBox.vgrow="ALWAYS">
+            <columns>
+                <TableColumn fx:id="nameCol" prefWidth="350.0" text="Tên tệp/thư mục" />
+                <TableColumn fx:id="typeCol" prefWidth="100.0" text="Loại" />
+                <TableColumn fx:id="sizeCol" prefWidth="120.0" text="Kích thước" />
+                <TableColumn fx:id="dateCol" prefWidth="180.0" text="Ngày sửa đổi" />
+            </columns>
+        </TableView>
+
+        <HBox alignment="CENTER_RIGHT" spacing="15.0">
+            <children>
+                <Label fx:id="statusLabel" text="Sẵn sàng" HBox.hgrow="ALWAYS" />
+                <Button onAction="#onDownloadToServer" style="-fx-background-color: #2196F3; -fx-text-fill: white;" text="Tải về Server" />
+            </children>
+        </HBox>
+    </children>
+</VBox>

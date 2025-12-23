@@ -41,6 +41,8 @@ public class ClientIdentityDAO {
                 ClientDevice d = new ClientDevice();
                 d.setClientId(rs.getInt("client_id"));
                 d.setClientName(rs.getString("client_name"));
+                d.setMacAddress(rs.getString("mac_address"));
+                d.setCurrentIp(rs.getString("current_ip"));
                 return Optional.of(d);
             }
         } catch(Exception e) { e.printStackTrace(); }

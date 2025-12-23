@@ -81,4 +81,25 @@ public class ClientDeviceDAO {
             return false;
         } finally { JDBCUtil.close(conn); }
     }
+    public Optional<ClientDevice> getClientById(int clientId) {
+        String sql = "SELECT * FROM client_devices WHERE client_id = ?";
+        try (Connection conn = JDBCUtil.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, clientId);
+            ResultSet rs = ps.executeQuery();
+
+            if (rs.next()) {
+                ClientDevice d = new ClientDevice();
+                d.setClientId(rs.getInt("client_id"));
+                d.setGroupId(rs.getInt("group_id"));
+                d.setMacAddress(rs.getString("mac_address"));
+                d.setClientName(rs.getString("client_name"));
+                return Optional.of(d);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return Optional.empty();
+    }
 }

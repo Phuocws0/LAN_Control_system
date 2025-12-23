@@ -18,6 +18,7 @@ public class ServerScreenService {
         this.robot = new Robot();
         this.screenRect = new Rectangle(Toolkit.getDefaultToolkit().getScreenSize());
     }
+    // Capture the screen and compress to JPEG byte array
     public byte[] captureAndCompress(float quality) throws IOException {
         BufferedImage screenshot = robot.createScreenCapture(screenRect);
         ByteArrayOutputStream baos = new ByteArrayOutputStream();

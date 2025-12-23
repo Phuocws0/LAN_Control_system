@@ -3,31 +3,47 @@ package com.lancontrol.client.util;
 import javax.crypto.Cipher;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
 public class SecurityUtil {
-    private static final String AES_ALGO = "AES";
+    // 1. Tên biến đổi đầy đủ cho Cipher
+    private static final String TRANSFORMATION = "AES/ECB/PKCS5Padding";
+    // 2. Tên thuật toán gốc cho SecretKeySpec
+    private static final String ALGO = "AES";
+
     private static final String HMAC_ALGO = "HmacSHA256";
     private static final String SECRET_KEY = "12345678901234567890123456789012";
-// 32 chars = 256 bits
+
     public static String encrypt(String data) throws Exception {
-        SecretKeySpec key = new SecretKeySpec(SECRET_KEY.getBytes(), AES_ALGO);
-        Cipher c = Cipher.getInstance(AES_ALGO);
+        if (data == null) return "";
+        // SỬA TẠI ĐÂY: Truyền ALGO ("AES") vào SecretKeySpec
+        SecretKeySpec key = new SecretKeySpec(SECRET_KEY.getBytes(StandardCharsets.UTF_8), ALGO);
+        Cipher c = Cipher.getInstance(TRANSFORMATION);
         c.init(Cipher.ENCRYPT_MODE, key);
-        return Base64.getEncoder().encodeToString(c.doFinal(data.getBytes()));
+        byte[] encVal = c.doFinal(data.getBytes(StandardCharsets.UTF_8));
+        return Base64.getEncoder().encodeToString(encVal);
     }
 
     public static String decrypt(String encryptedData) throws Exception {
-        SecretKeySpec key = new SecretKeySpec(SECRET_KEY.getBytes(), AES_ALGO);
-        Cipher c = Cipher.getInstance(AES_ALGO);
+        if (encryptedData == null || encryptedData.isEmpty()) return "";
+        // SỬA TẠI ĐÂY: Truyền ALGO ("AES") vào SecretKeySpec
+        SecretKeySpec key = new SecretKeySpec(SECRET_KEY.getBytes(StandardCharsets.UTF_8), ALGO);
+        Cipher c = Cipher.getInstance(TRANSFORMATION);
         c.init(Cipher.DECRYPT_MODE, key);
-        return new String(c.doFinal(Base64.getDecoder().decode(encryptedData)));
+
+        byte[] decodedValue = Base64.getDecoder().decode(encryptedData);
+        byte[] decValue = c.doFinal(decodedValue);
+
+        // Trim để xóa sạch ký tự rác nếu có
+        return new String(decValue, StandardCharsets.UTF_8).trim();
     }
 
     public static String generateHMAC(String data) throws Exception {
-        SecretKeySpec key = new SecretKeySpec(SECRET_KEY.getBytes(), HMAC_ALGO);
+        SecretKeySpec key = new SecretKeySpec(SECRET_KEY.getBytes(StandardCharsets.UTF_8), HMAC_ALGO);
         Mac mac = Mac.getInstance(HMAC_ALGO);
         mac.init(key);
-        return Base64.getEncoder().encodeToString(mac.doFinal(data.getBytes()));
+        byte[] hmacBytes = mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
+        return Base64.getEncoder().encodeToString(hmacBytes);
     }
 }

@@ -12,29 +12,33 @@ public class FileExplorerService {
      */
     public List<FileNode> listFiles(String path) {
         List<FileNode> nodes = new ArrayList<>();
-        File[] files;
 
-        if (path == null || path.isEmpty()) {
-            // Liệt kê các gốc hệ thống (Drives)
+        // 1. Làm sạch chuỗi lần cuối
+        String cleanPath = (path == null) ? "" : path.replace("\"", "").trim();
+
+        File[] files;
+        if (cleanPath.isEmpty()) {
+            // 2. Liệt kê các gốc hệ thống (C:\, D:\...) [cite: 714]
             files = File.listRoots();
         } else {
-            File dir = new File(path);
+            File dir = new File(cleanPath);
             if (dir.exists() && dir.isDirectory()) {
                 files = dir.listFiles();
             } else {
+                System.err.println(">> [Client] Thư mục không hợp lệ: " + cleanPath);
                 return nodes;
             }
         }
 
         if (files != null) {
             for (File f : files) {
-                // Tạo node thông tin (Lấy tên root nếu f.getName() trống cho các ổ đĩa)
-                String name = (f.getName().isEmpty()) ? f.getPath() : f.getName();
-                nodes.add(new FileNode(
+                // Đối với ổ đĩa (roots), getName() thường trống, nên lấy path làm tên [cite: 718, 719]
+                String name = (f.getName() == null || f.getName().isEmpty()) ? f.getPath() : f.getName();
+                nodes.add(new com.lancontrol.client.model.FileNode(
                         name,
                         f.getAbsolutePath(),
                         f.isDirectory(),
-                        f.length(),
+                        f.isDirectory() ? 0 : f.length(),
                         f.lastModified()
                 ));
             }

@@ -1,20 +1,42 @@
 package com.lancontrol.client.handler;
 public class CommandExecutor {
-    public void shutdown() { exec("shutdown -s -t 5"); }
-    public void restart() { exec("shutdown -r -t 5"); }
+    public void shutdown() {
+        String os = System.getProperty("os.name").toLowerCase();
+        if (os.contains("win")) {
+            exec("shutdown -s -t 5"); // Tắt máy sau 5 giây trên Windows [cite: 181]
+        } else {
+            exec("shutdown -h now"); // Tắt máy ngay lập tức trên Linux/Mac
+        }
+    }    public void restart() { exec("shutdown -r -t 5"); }
     private void exec(String cmd) {
         try { Runtime.getRuntime().exec(cmd); } catch(Exception e){}
     }
-    public void killProcess(int pid) {
-        System.out.println("!!! ĐANG THỰC HIỆN KILL PROCESS PID: " + pid + " !!!");
+    public void sleep() {
         String os = System.getProperty("os.name").toLowerCase();
-        String cmd;
-
         if (os.contains("win")) {
-            cmd = "taskkill /F /PID " + pid;
+            // Lệnh Sleep trên Windows (yêu cầu quyền hoặc PowerShell)
+            exec("powershell.exe -Command \"Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Application]::SetSuspendState([System.Windows.Forms.PowerState]::Suspend, $false, $false)\"");
+        } else if (os.contains("mac")) {
+            exec("pmset sleepnow");
         } else {
-            cmd = "kill -9 " + pid;
+            exec("systemctl suspend"); // Lệnh Sleep cho Linux
         }
-        exec(cmd);
+    }
+    public boolean killProcess(int pid) {
+        try {
+            Process p;
+            if (System.getProperty("os.name").toLowerCase().contains("win")) {
+                // /F là ép buộc, /PID là theo ID
+                p = Runtime.getRuntime().exec("taskkill /F /PID " + pid);
+            } else {
+                p = Runtime.getRuntime().exec("kill -9 " + pid);
+            }
+
+            // Đợi lệnh thực thi xong và lấy mã thoát
+            int exitCode = p.waitFor();
+            return exitCode == 0;
+        } catch (Exception e) {
+            return false;
+        }
     }
 }
