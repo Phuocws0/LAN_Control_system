@@ -1,4 +1,4 @@
-package org.example;
+package com.lancontrol.client;
 
 import junit.framework.Test;
 import junit.framework.TestCase;

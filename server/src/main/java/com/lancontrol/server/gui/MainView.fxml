@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+
+<BorderPane maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" prefHeight="400.0" prefWidth="600.0" xmlns="http://javafx.com/javafx/17.0.12" xmlns:fx="http://javafx.com/fxml/1">
+   <left>
+      <Button mnemonicParsing="false" text="Button" BorderPane.alignment="CENTER" />
+   </left>
+   <center>
+      <Button mnemonicParsing="false" text="Button" BorderPane.alignment="CENTER" />
+   </center>
+   <right>
+      <Button mnemonicParsing="false" text="Button" BorderPane.alignment="CENTER" />
+   </right>
+   <bottom>
+      <Button mnemonicParsing="false" text="Button" BorderPane.alignment="CENTER" />
+   </bottom>
+   <top>
+      <AnchorPane prefHeight="77.0" prefWidth="600.0" BorderPane.alignment="CENTER">
+         <children>
+            <Button layoutX="48.0" layoutY="26.0" mnemonicParsing="false" text="Button" />
+            <Button layoutX="112.0" layoutY="26.0" mnemonicParsing="false" text="Button" />
+         </children>
+      </AnchorPane>
+   </top>
+</BorderPane>
