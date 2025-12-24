@@ -244,6 +244,20 @@ public class SocketClient {
         String cmd = p.getCommand();
         switch (cmd) {
             case "CMD_SHUTDOWN": exec.shutdown(); break;
+            case "REQ_DOWNLOAD_FILE":
+                // 1. Giải mã thông tin tệp từ payload JSON [cite: 115, 178]
+                FileTransferRequest downloadReq = gson.fromJson(p.getPayloadJson(), FileTransferRequest.class);
+
+                if (downloadReq != null) {
+                    // 2. Khởi tạo FileDownloader với IP của Server hiện tại [cite: 93, 95]
+                    String serverIp = s.getInetAddress().getHostAddress();
+                    FileDownloader downloader = new FileDownloader(serverIp);
+
+                    // 3. Bắt đầu quá trình tải về (mặc định vào C:\LanControlDownloads\) [cite: 94, 96]
+                    downloader.downloadFile(downloadReq);
+                    System.out.println(">> [Client] Đang bắt đầu tải file từ Server: " + downloadReq.getFileName());
+                }
+                break;
             case "GET_PROCESSES":
                 sendSecure("PROCESS_LIST_RESPONSE", cfg.getToken(), mon.getProcesses());
                 break;

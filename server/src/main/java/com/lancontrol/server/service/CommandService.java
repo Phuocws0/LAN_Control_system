@@ -88,6 +88,21 @@ public class CommandService {
         }
     }
 
+    public void sendDownloadRequest(int clientId, File localFile) {
+        // 1. Tạo ID duy nhất cho tệp để Client truy vấn
+        String fileId = UUID.randomUUID().toString();
+
+        // 2. Đăng ký tệp vào FileServer để chờ Client kết nối
+        fileServer.registerFile(fileId, localFile);
+
+        // 3. Đóng gói thông tin tệp gửi qua lệnh JSON [cite: 809, 906]
+        FileTransferRequest req = new FileTransferRequest(fileId, localFile.getName(), localFile.length());
+
+        // 4. Gửi lệnh REQ_DOWNLOAD_FILE tới Client [cite: 292, 296]
+        sendSecure(clientId, "REQ_DOWNLOAD_FILE", req);
+        System.out.println(">> [Server] Đã gửi yêu cầu tải file tới Client " + clientId + ": " + localFile.getName());
+    }
+
     // --- XỬ LÝ PHẢN HỒI TỪ CLIENT (Dữ liệu về) ---
 
     public void handleClientResponse(int clientId, NetworkPacket pkt) {
@@ -99,6 +114,7 @@ public class CommandService {
             case "PROCESS_LIST_RESPONSE":
                 handleProcessData(clientId, jsonPayload); // Xử lý danh sách tiến trình
                 break;
+
             case "FILE_TREE_RESPONSE":
                 System.out.println("[INFO] Nhận File Tree từ Client " + clientId);
                 System.out.println("[DEBUG] Raw JSON Payload: " + jsonPayload);

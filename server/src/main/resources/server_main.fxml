@@ -66,6 +66,7 @@
                 <VBox spacing="10.0" VBox.vgrow="ALWAYS">
                     <children>
                         <Label style="-fx-font-weight: bold;" text="Điều khiển nhanh" />
+                        <Button maxWidth="Infinity" onAction="#onSendFileClick" style="-fx-cursor: hand;" text="Gửi tập tin" />
                         <Button maxWidth="Infinity" onAction="#onFileExplorerClick" style="-fx-cursor: hand;" text="Quản lý tệp tin" />
                         <Button maxWidth="Infinity" onAction="#onProcessClick" style="-fx-cursor: hand;" text="Quản lý tiến trình" />
                         <Button maxWidth="Infinity" onAction="#onControlClick" style="-fx-cursor: hand;" text="Điều khiển từ xa" />

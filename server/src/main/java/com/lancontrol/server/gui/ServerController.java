@@ -19,6 +19,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
 import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.util.HashMap;
@@ -333,4 +334,19 @@ public class ServerController implements ScreenDataListener, HeartbeatListener, 
             showError("Không thể mở trình quản lý tệp tin: " + e.getMessage());
         }
     }
+
+
+    @FXML
+    public void onSendFileClick() {
+        if (selectedClientId == null) return;
+
+        javafx.stage.FileChooser fileChooser = new javafx.stage.FileChooser();
+        fileChooser.setTitle("Chọn file gửi tới Client");
+        File selectedFile = fileChooser.showOpenDialog(null);
+
+        if (selectedFile != null) {
+            commandService.sendDownloadRequest(selectedClientId, selectedFile);
+        }
+    }
+
 }
