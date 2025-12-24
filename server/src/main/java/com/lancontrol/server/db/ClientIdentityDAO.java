@@ -19,7 +19,15 @@ public class ClientIdentityDAO {
             ps.executeUpdate();
         } catch(Exception e) {}
 
-        String sql = "INSERT INTO client_identities (client_id, auth_key_hash, key_type, status, expires_at) VALUES (?, ?, 'JWT', 'active', DATE_ADD(NOW(), INTERVAL 30 DAY))";
+       // String sql = "INSERT INTO client_identities (client_id, auth_key_hash, key_type, status, expires_at) VALUES (?, ?, 'JWT', 'active', DATE_ADD(NOW(), INTERVAL 30 DAY))";
+
+
+        String sql = "INSERT INTO client_identities (client_id, auth_key_hash, key_type, status, expires_at) " +
+                "VALUES (?, ?, 'JWT', 'active', DATE_ADD(NOW(), INTERVAL 30 DAY)) " +
+                "ON DUPLICATE KEY UPDATE " +
+                "auth_key_hash = VALUES(auth_key_hash), " + // Cập nhật hash mới
+                "status = 'active', " +                      // Kích hoạt lại nếu đang bị khóa
+                "expires_at = DATE_ADD(NOW(), INTERVAL 30 DAY)"; // Gia hạn thêm 30 ngày
         try (Connection conn = JDBCUtil.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, clientId);

@@ -27,12 +27,12 @@ public class SocketClient {
     private final FileExplorerService fileExplorer = new FileExplorerService();
 
     private Socket s;
-    private DataOutputStream dos; // Sử dụng Binary Stream
-    private DataInputStream dis;  // Sử dụng Binary Stream
+    private DataOutputStream dos;
+    private DataInputStream dis;
 
     private boolean auth = false;
     private volatile boolean isStreaming = false;
-    private volatile boolean isBusy = false; // Chống nghẽn ảnh
+    private volatile boolean isBusy = false;
 
     private long sequenceCount = 0;
     private long lastServerSequence = -1;
@@ -56,6 +56,7 @@ public class SocketClient {
             } catch (Exception e) {
                 auth = false;
                 isStreaming = false;
+                // Chỉ in lỗi nếu không phải là ngắt kết nối chủ động
                 System.err.println(">> [Client] Mất kết nối, thử lại sau 5 giây... (" + e.getMessage() + ")");
                 try { Thread.sleep(5000); } catch(Exception ex){}
             } finally {
@@ -65,29 +66,43 @@ public class SocketClient {
     }
 
     private void connect() throws Exception {
+        // [QUAN TRỌNG] Dọn dẹp luồng cũ sạch sẽ trước khi tạo kết nối mới
         stopOldThreads();
+        closeResources();
 
+        System.out.println(">> [Client] Đang kết nối đến Server...");
         // 1. Khởi tạo Socket
-        this.s = new Socket("127.0.0.1", 9999);
+        this.s = new Socket("127.0.0.1", 9999); // IP Server của bạn
         this.s.setSoTimeout(60000);
-        this.s.setTcpNoDelay(true); // Gửi gói tin ngay lập tức (giảm lag)
+        this.s.setTcpNoDelay(true);
 
-        // 2. Khởi tạo Luồng nhị phân
+        // 2. Khởi tạo Stream
         this.dos = new DataOutputStream(s.getOutputStream());
         this.dis = new DataInputStream(s.getInputStream());
 
         String token = cfg.getToken();
-        if (token == null) {
+
+        // 3. Phân luồng Logic: Onboard hoặc Login
+        if (token == null || token.isEmpty()) {
             doOnboard();
+            // [QUAN TRỌNG] Sau khi Onboard xong, thoát hàm connect() ngay
+            // Để vòng lặp while(true) ở start() thực hiện kết nối lại với Token mới.
+            return;
         } else {
             doAuth(token);
         }
 
+        // 4. Chỉ chạy các tác vụ nền khi đã Auth thành công
         if (auth) {
+            System.out.println(">> [Client] Đăng nhập thành công!");
             heartbeatThread = new Thread(this::heartbeat);
             heartbeatThread.start();
+
             startStreamingTask("THUMBNAIL");
-            listen(); // Bắt đầu vòng lặp nhận lệnh chính
+            listen(); // Bắt đầu vòng lặp nhận lệnh (Block tại đây)
+        } else {
+            System.err.println(">> [Client] Token không hợp lệ. Đang xóa token để Onboard lại...");
+            cfg.saveToken(null);
         }
     }
 
@@ -114,11 +129,10 @@ public class SocketClient {
 
                 byte[] data = gson.toJson(p).getBytes(StandardCharsets.UTF_8);
 
-                // Gửi theo khung: [Type: 0x01][Size: 4 bytes][Data]
                 dos.writeByte(0x01);
                 dos.writeInt(data.length);
                 dos.write(data);
-                dos.flush();
+                dos.flush(); // Bắt buộc flush
             }
         } catch (Exception e) {
             System.err.println(">> [Lỗi Gửi JSON] " + e.getMessage());
@@ -129,14 +143,75 @@ public class SocketClient {
         if (imgBytes == null || s == null || s.isClosed()) return;
         synchronized (sendLock) {
             try {
-                // Gửi theo khung: [Type: 0x02][Size: 4 bytes][Data]
-                dos.writeByte(0x02);          // Type ảnh Raw
-                dos.writeInt(imgBytes.length); // Không cần Base64 nữa!
+                dos.writeByte(0x02);
+                dos.writeInt(imgBytes.length);
                 dos.write(imgBytes);
-                dos.flush();
+                dos.flush(); // Bắt buộc flush
             } catch (IOException e) {
-                System.err.println(">> [Lỗi Gửi Ảnh] " + e.getMessage());
+                // Không in lỗi ở đây để tránh spam log khi mất kết nối
             }
+        }
+    }
+
+    // --- ONBOARDING & AUTH ---
+
+    private void doOnboard() throws IOException {
+        System.out.println(">> [Client] Chưa có Token. Bắt đầu Onboarding...");
+
+        OnboardingPayload pl = new OnboardingPayload(
+                cfg.getKey(), HardwareUtil.getMacAddress(), HardwareUtil.getHostName(),
+                System.getProperty("os.name"), HardwareUtil.getCpuName(),
+                HardwareUtil.getTotalRam(), HardwareUtil.getTotalDiskGb(), HardwareUtil.getLocalIpAddress()
+        );
+
+        // Gửi lệnh Onboard
+        sendSecure("ONBOARDING", null, pl);
+
+        // [QUAN TRỌNG] Đợi Server trả về Token
+        try {
+            byte type = dis.readByte();
+            int size = dis.readInt();
+            byte[] data = new byte[size];
+            dis.readFully(data);
+
+            String jsonRaw = new String(data, StandardCharsets.UTF_8);
+            NetworkPacket resp = gson.fromJson(jsonRaw, NetworkPacket.class);
+
+            if (resp != null && resp.getPayloadJson() != null) {
+                // Giải mã lấy Token
+                String decrypted = SecurityUtil.decrypt(resp.getPayloadJson());
+                AuthResponse authRes = gson.fromJson(decrypted, AuthResponse.class);
+
+                if (authRes != null && authRes.getNewToken() != null) {
+                    System.out.println(">> [Client] Nhận Token mới: " + authRes.getNewToken());
+                    cfg.saveToken(authRes.getNewToken()); // Lưu vào file
+                }
+            }
+        } catch (Exception e) {
+            System.err.println(">> [Client] Lỗi đọc phản hồi Onboard: " + e.getMessage());
+        }
+
+        // Set auth = false để ép connect() thoát ra và reconnect lại
+        this.auth = false;
+    }
+
+    private void doAuth(String t) throws IOException {
+        sendSecure("AUTH_DAILY", t, null);
+
+        // Đọc phản hồi Auth
+        byte type = dis.readByte();
+        int size = dis.readInt();
+        byte[] data = new byte[size];
+        dis.readFully(data);
+
+        String jsonRaw = new String(data, StandardCharsets.UTF_8);
+        NetworkPacket resp = gson.fromJson(jsonRaw, NetworkPacket.class);
+
+        // Kiểm tra xem Server có báo AUTH_SUCCESS không
+        if (resp != null && "AUTH_SUCCESS".equals(resp.getCommand())) {
+            this.auth = true;
+        } else {
+            this.auth = false;
         }
     }
 
@@ -144,17 +219,18 @@ public class SocketClient {
 
     private void listen() throws IOException {
         while (!s.isClosed()) {
-            // 1. Đọc Type (1 byte)
             byte type = dis.readByte();
-            // 2. Đọc Size (4 bytes)
             int size = dis.readInt();
-            if (size <= 0 || size > 15 * 1024 * 1024) continue;
 
-            // 3. Đọc dữ liệu
+            if (size <= 0 || size > 15 * 1024 * 1024) {
+                // Bảo vệ bộ nhớ
+                throw new IOException("Gói tin kích thước không hợp lệ: " + size);
+            }
+
             byte[] payload = new byte[size];
             dis.readFully(payload);
 
-            if (type == 0x01) { // Chỉ xử lý JSON lệnh
+            if (type == 0x01) {
                 String line = new String(payload, StandardCharsets.UTF_8);
                 handleCommand(line);
             }
@@ -171,12 +247,10 @@ public class SocketClient {
             case "GET_PROCESSES":
                 sendSecure("PROCESS_LIST_RESPONSE", cfg.getToken(), mon.getProcesses());
                 break;
-            case "SLEEP":
-                exec.sleep();
-                break;
+            case "SLEEP": exec.sleep(); break;
             case "REQ_START_SCREEN_STREAM":
                 startStreamingTask("FULL");
-            break;
+                break;
             case "REQ_STOP_SCREEN_STREAM":
                 this.isStreaming = false;
                 new Thread(() -> {
@@ -185,68 +259,61 @@ public class SocketClient {
                 }).start();
                 break;
             case "CMD_KILL_PROCESS":
-                // 1. Giải mã JSON lấy PID
                 Map data = gson.fromJson(p.getPayloadJson(), Map.class);
                 if (data != null && data.containsKey("pid")) {
                     int pidToKill = ((Double) data.get("pid")).intValue();
-
-                    // 2. Thực hiện Kill
                     boolean success = exec.killProcess(pidToKill);
-
-                    // 3. Gửi phản hồi về Server để cập nhật UI
                     Map<String, Object> response = new HashMap<>();
                     response.put("pid", pidToKill);
                     response.put("status", success ? "SUCCESS" : "FAILED");
                     sendSecure("PROCESS_KILL_RESPONSE", cfg.getToken(), response);
                 }
                 break;
-
             case "GET_FILE_TREE":
                 String rawPath = p.getPayloadJson();
-
-                // Xử lý loại bỏ dấu nháy kép thực tế nếu có (ví dụ: "C:\" -> C:\)
                 if (rawPath != null) {
                     rawPath = rawPath.trim();
                     if (rawPath.startsWith("\"") && rawPath.endsWith("\"")) {
                         rawPath = rawPath.substring(1, rawPath.length() - 1);
                     }
                 }
-
-                // Nếu sau khi xóa nháy mà chuỗi vẫn là "" (rỗng), listFiles sẽ quét ổ đĩa [cite: 714]
                 List<FileNode> nodes = fileExplorer.listFiles(rawPath);
-
-                System.out.println(">> [Client] Đang quét: '" + rawPath + "' - Tìm thấy: " + nodes.size() + " mục.");
                 sendSecure("FILE_TREE_RESPONSE", cfg.getToken(), nodes);
                 break;
             case "REQ_UPLOAD_FILE":
                 String fileToUpload = p.getPayloadJson();
-
-                // Làm sạch dấu nháy kép để FileUploader nhận đúng đường dẫn [cite: 106, 114]
                 if (fileToUpload != null) {
                     fileToUpload = fileToUpload.trim();
                     if (fileToUpload.startsWith("\"") && fileToUpload.endsWith("\"")) {
                         fileToUpload = fileToUpload.substring(1, fileToUpload.length() - 1);
                     }
                 }
-
                 if (fileToUpload != null && !fileToUpload.isEmpty()) {
-                    new FileUploader(s.getInetAddress().getHostAddress()).uploadFile(fileToUpload); // [cite: 106, 114]
+                    new FileUploader(s.getInetAddress().getHostAddress()).uploadFile(fileToUpload);
                 }
                 break;
-
         }
     }
 
-    // --- QUẢN LÝ STREAMING (TỐI ƯU) ---
+    // --- QUẢN LÝ STREAMING (FIX LỖI GHOST THREAD) ---
 
     private void startStreamingTask(String mode) {
         isStreaming = false;
         try { Thread.sleep(300); } catch (Exception e) {}
         isStreaming = true;
 
+        // Lưu lại socket hiện tại để luồng check
+        final Socket currentSocket = this.s;
+
         streamingThread = new Thread(() -> {
-            while (isStreaming && !s.isClosed()) {
-                if (isBusy) { // Nếu mạng đang nghẽn, bỏ qua khung hình này
+            while (isStreaming && !currentSocket.isClosed()) {
+                // Kiểm tra nếu Socket chính đã bị thay đổi (do reconnect)
+                if (this.s != currentSocket) {
+                    System.out.println(">> [Stream] Socket thay đổi -> Tự hủy luồng cũ.");
+                    break;
+                }
+
+                if (isBusy) {
                     try { Thread.sleep(10); } catch (Exception e) {}
                     continue;
                 }
@@ -254,16 +321,17 @@ public class SocketClient {
                     isBusy = true;
                     byte[] data;
                     if ("FULL".equals(mode)) {
-                        data = screenService.captureStreaming(0.3f); // Nén mạnh + Resize 50%
+                        data = screenService.captureStreaming(0.3f);
                     } else {
                         data = screenService.captureDownscaledAndCompress(320, 180, 0.4f);
                     }
 
                     if (data != null) {
-                        sendImageRaw(data); // GỬI ẢNH RAW TRỰC TIẾP
+                        sendImageRaw(data);
                     }
 
-                    Thread.sleep("FULL".equals(mode) ? 80 : 1000);
+                    // Tăng delay lên 100ms để tránh nghẽn mạng
+                    Thread.sleep("FULL".equals(mode) ? 100 : 1000);
                 } catch (Exception e) { break; }
                 finally { isBusy = false; }
             }
@@ -271,48 +339,36 @@ public class SocketClient {
         streamingThread.start();
     }
 
-    // --- TIỆN ÍCH ---
-
-    private void doAuth(String t) throws IOException {
-        sendSecure("AUTH_DAILY", t, null);
-        // Đọc phản hồi Auth (Binary)
-        if (dis.readByte() == 0x01) {
-            int size = dis.readInt();
-            byte[] data = new byte[size];
-            dis.readFully(data);
-            String res = new String(data, StandardCharsets.UTF_8);
-            if (res.contains("AUTH_SUCCESS")) auth = true;
-        }
-    }
-
-    private void doOnboard() throws IOException {
-        OnboardingPayload pl = new OnboardingPayload(
-                cfg.getKey(), HardwareUtil.getMacAddress(), HardwareUtil.getHostName(),
-                System.getProperty("os.name"), HardwareUtil.getCpuName(),
-                HardwareUtil.getTotalRam(), HardwareUtil.getTotalDiskGb(), HardwareUtil.getLocalIpAddress()
-        );
-        sendSecure("ONBOARDING", null, pl);
-        // Đọc phản hồi Onboard tương tự doAuth...
-        auth = true; // Giả định thành công để giản lược
-    }
-
     private void heartbeat() {
         while (auth && !s.isClosed()) {
             try {
+                if (s == null || s.isClosed()) break;
                 sendSecure("HEARTBEAT", cfg.getToken(), mon.collect());
                 Thread.sleep(5000);
             } catch(Exception e) { break; }
         }
     }
 
+    // --- QUẢN LÝ LUỒNG (FIX LỖI ABORT) ---
+
     private void stopOldThreads() {
         isStreaming = false;
-        if (heartbeatThread != null) heartbeatThread.interrupt();
-        if (streamingThread != null) streamingThread.interrupt();
+
+        if (heartbeatThread != null && heartbeatThread.isAlive()) {
+            heartbeatThread.interrupt();
+            try { heartbeatThread.join(1000); } catch (InterruptedException e) {} // Đợi chết hẳn
+        }
+
+        if (streamingThread != null && streamingThread.isAlive()) {
+            streamingThread.interrupt();
+            try { streamingThread.join(1000); } catch (InterruptedException e) {} // Đợi chết hẳn
+        }
     }
 
     private void closeResources() {
-        try { if (s != null) s.close(); } catch (IOException e) {}
+        try { if (dis != null) dis.close(); } catch (Exception e) {}
+        try { if (dos != null) dos.close(); } catch (Exception e) {}
+        try { if (s != null) s.close(); } catch (Exception e) {}
     }
 
     private NetworkPacket decryptAndVerify(String line) {
