@@ -97,6 +97,12 @@ public class ClientDeviceDAO {
                 d.setGroupId(rs.getInt("group_id"));
                 d.setMacAddress(rs.getString("mac_address"));
                 d.setClientName(rs.getString("client_name"));
+                d.setCurrentIp(rs.getString("current_ip"));
+                d.setOnline(rs.getBoolean("is_online"));
+                d.setOs(rs.getString("os"));
+                d.setCpuInfo(rs.getString("cpu_info"));
+                d.setRamTotal(rs.getLong("ram_total"));
+                d.setDiskTotalGb(rs.getInt("disk_total_gb"));
                 return Optional.of(d);
             }
         } catch (SQLException e) {
@@ -158,12 +164,20 @@ public class ClientDeviceDAO {
     private ClientDevice mapResultSetToDevice(ResultSet rs) throws SQLException {
         ClientDevice d = new ClientDevice();
         d.setClientId(rs.getInt("client_id"));
-        d.setGroupId(rs.getInt("group_id")); // Quan trọng
+        d.setGroupId(rs.getInt("group_id"));
         d.setClientName(rs.getString("client_name"));
         d.setCurrentIp(rs.getString("current_ip"));
         d.setMacAddress(rs.getString("mac_address"));
         d.setOnline(rs.getBoolean("is_online"));
-        // ... map thêm các trường khác nếu cần
+
+        // --- LẤY THÊM THÔNG TIN CẤU HÌNH ---
+        // (Đảm bảo tên cột khớp với Database của bạn)
+        d.setOs(rs.getString("os"));
+        d.setCpuInfo(rs.getString("cpu_info"));
+        d.setRamTotal(rs.getLong("ram_total"));
+        d.setDiskTotalGb(rs.getInt("disk_total_gb"));
+        // ------------------------------------
+
         return d;
     }
     public boolean deleteDevice(int clientId) {
@@ -185,4 +199,5 @@ public class ClientDeviceDAO {
         } catch (SQLException e) { e.printStackTrace(); }
         return list;
     }
+
 }

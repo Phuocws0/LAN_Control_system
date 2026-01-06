@@ -55,7 +55,15 @@
                         <Label fx:id="nameLabel" style="-fx-font-weight: bold; -fx-text-fill: #0078d7;" text="Name: --" />
                         <Label fx:id="ipLabel" text="IP: --" />
                         <Label fx:id="macLabel" style="-fx-font-size: 11px; -fx-text-fill: #888888;" text="MAC: --" />
+
                         <Separator />
+
+                        <Label fx:id="osLabel" text="OS: --" wrapText="true"/>
+                        <Label fx:id="cpuModelLabel" text="Core: --" wrapText="true"/>
+                        <Label fx:id="ramTotalLabel" text="Total RAM: --" />
+                        <Label fx:id="diskTotalLabel" text="Total Disk: --" />
+                        <Separator />
+                        <Label style="-fx-font-weight: bold; -fx-font-size: 11px;" text="TRẠNG THÁI HIỆN TẠI" />
                         <Label fx:id="cpuLabel" text="CPU: --" />
                         <Label fx:id="ramLabel" text="RAM: --" />
                         <Label fx:id="diskLabel" text="DISK: --" />

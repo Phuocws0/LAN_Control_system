@@ -27,6 +27,7 @@ import java.net.URL;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 public class ServerController implements ScreenDataListener, HeartbeatListener, ProcessDataListener {
 
@@ -35,6 +36,7 @@ public class ServerController implements ScreenDataListener, HeartbeatListener, 
     @FXML private VBox deviceListContainer; // Danh sách máy dạng text bên trái (nếu cần dùng)
     @FXML private VBox groupContainer;      // Danh sách nhóm bên trái
     @FXML private GridPane myGrid;          // Lưới hiển thị máy trạm ở giữa
+    @FXML private Label osLabel, cpuModelLabel, ramTotalLabel, diskTotalLabel;
 
     // --- SERVICES ---
     private final CommandService commandService;
@@ -286,6 +288,16 @@ public class ServerController implements ScreenDataListener, HeartbeatListener, 
 
         // Cập nhật Panel bên phải
         ClientSession session = sessionManager.get(clientId);
+        Optional<ClientDevice> devOpt = deviceDAO.getClientById(clientId);
+        if (devOpt.isPresent()) {
+            ClientDevice dev = devOpt.get();
+            osLabel.setText("OS: " + (dev.getOs() != null ? dev.getOs() : "Unknown"));
+            cpuModelLabel.setText("CPU: " + (dev.getCpuInfo() != null ? dev.getCpuInfo() : "Unknown"));
+            double ramGb = dev.getRamTotal() / (1024.0 * 1024 * 1024);
+            String ramText = (dev.getRamTotal() > 0) ? String.format("%.1f GB", ramGb) : "Unknown";
+            ramTotalLabel.setText("RAM: " + ramText);
+            diskTotalLabel.setText("DISK: " + (dev.getDiskTotalGb() >0 ? dev.getDiskTotalGb() + " GB" : "Unknown"));
+        }
         if (session != null) {
             nameLabel.setText("Name: " + session.getHostname());
             ipLabel.setText("IP: " + session.getIpAddress());
