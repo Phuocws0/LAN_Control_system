@@ -8,7 +8,7 @@ import java.util.Properties;
 public class JDBCUtil {
     private static final String DB_URL = "jdbc:mysql://localhost:3306/lan_control_db";
     private static final String USER = "root";
-    private static final String PASS = "08112005";
+    private static final String PASS = "";
 
     public static Connection getConnection() throws SQLException {
         Properties props = new Properties();

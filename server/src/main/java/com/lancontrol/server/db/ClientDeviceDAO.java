@@ -4,6 +4,8 @@ import com.lancontrol.server.model.ClientDevice;
 import com.lancontrol.server.model.HeartbeatModel;
 import com.lancontrol.server.model.OnboardingPayload;
 import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 public class ClientDeviceDAO {
@@ -101,5 +103,86 @@ public class ClientDeviceDAO {
             e.printStackTrace();
         }
         return Optional.empty();
+    }
+
+    public void updateCurrentIp(int clientId, String socketIp) {
+        String sql = "UPDATE client_devices SET current_ip = ? WHERE client_id = ?";
+        try (Connection conn = JDBCUtil.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setString(1, socketIp);
+            ps.setInt(2, clientId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void updateIp(int clientId, String socketIp) {
+        String sql = "UPDATE client_devices SET current_ip = ? WHERE client_id = ?";
+        try (Connection conn = JDBCUtil.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setString(1, socketIp);
+            ps.setInt(2, clientId);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+    public List<ClientDevice> getAllClients() {
+        List<ClientDevice> list = new ArrayList<>();
+        String sql = "SELECT * FROM client_devices";
+        try (Connection conn = JDBCUtil.getConnection();
+             Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            while (rs.next()) {
+                list.add(mapResultSetToDevice(rs));
+            }
+        } catch (SQLException e) { e.printStackTrace(); }
+        return list;
+    }
+    public List<ClientDevice> getClientsByGroup(int groupId) {
+        List<ClientDevice> list = new ArrayList<>();
+        String sql = "SELECT * FROM client_devices WHERE group_id = ?";
+        try (Connection conn = JDBCUtil.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, groupId);
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+                list.add(mapResultSetToDevice(rs));
+            }
+        } catch (SQLException e) { e.printStackTrace(); }
+        return list;
+    }
+    private ClientDevice mapResultSetToDevice(ResultSet rs) throws SQLException {
+        ClientDevice d = new ClientDevice();
+        d.setClientId(rs.getInt("client_id"));
+        d.setGroupId(rs.getInt("group_id")); // Quan trọng
+        d.setClientName(rs.getString("client_name"));
+        d.setCurrentIp(rs.getString("current_ip"));
+        d.setMacAddress(rs.getString("mac_address"));
+        d.setOnline(rs.getBoolean("is_online"));
+        // ... map thêm các trường khác nếu cần
+        return d;
+    }
+    public boolean deleteDevice(int clientId) {
+        String sql = "DELETE FROM client_devices WHERE client_id = ?";
+        try (Connection conn = JDBCUtil.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, clientId);
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) { e.printStackTrace(); return false; }
+    }
+    public List<Integer> getClientIdsByGroup(int groupId) {
+        List<Integer> list = new ArrayList<>();
+        String sql = "SELECT client_id FROM client_devices WHERE group_id = ?";
+        try (Connection conn = JDBCUtil.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, groupId);
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) list.add(rs.getInt(1));
+        } catch (SQLException e) { e.printStackTrace(); }
+        return list;
     }
 }

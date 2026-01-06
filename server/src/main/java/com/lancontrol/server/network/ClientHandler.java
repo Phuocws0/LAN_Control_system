@@ -172,80 +172,122 @@ public class ClientHandler implements Runnable {
     private boolean handleHandshake() {
         System.out.println(">> [HANDSHAKE] Bắt đầu đọc gói tin đầu tiên...");
         try {
-            // 1. Đọc Type
+            // 1. Đọc Type (1 byte)
             byte type = dis.readByte();
-            if (type != 0x01) {
-                System.err.println(">> [LỖI] Type gói tin đầu không phải JSON (0x01). Nhận được: " + type);
+            if (type != 0x01) { // 0x01 là gói JSON
+                System.err.println(">> [LỖI] Gói đầu tiên không phải JSON (0x01). Nhận được: " + type);
                 return false;
             }
 
-            // 2. Đọc Size
+            // 2. Đọc Size (4 byte)
             int size = dis.readInt();
-            if (size <= 0 || size > 1024 * 1024) {
+            if (size <= 0 || size > 2 * 1024 * 1024) { // Max 2MB cho gói handshake
                 System.err.println(">> [LỖI] Kích thước gói tin không hợp lệ: " + size);
                 return false;
             }
 
-            // 3. Đọc Data
+            // 3. Đọc Data (Payload đã mã hóa)
             byte[] data = new byte[size];
             dis.readFully(data);
             String jsonRaw = new String(data, StandardCharsets.UTF_8);
 
-            // 4. Giải mã
-            // [ĐIỂM CHẾT 1] Nếu sai Key hoặc sai HMAC, hàm này trả về null -> return false
+            // 4. Giải mã & Kiểm tra HMAC
+            // Hàm này sẽ return null nếu sai Key hoặc sai Chữ ký HMAC
             NetworkPacket p = decryptAndVerify(jsonRaw);
+
             if (p == null) {
-                System.err.println(">> [LỖI] Giải mã thất bại (Sai Token/Key hoặc HMAC).");
+                System.err.println(">> [LỖI] Giải mã thất bại (Sai Token/Key hoặc HMAC). IP: " + socket.getInetAddress());
                 return false;
             }
 
             System.out.println(">> [HANDSHAKE] Nhận lệnh: " + p.getCommand());
 
-            // 5. Xử lý logic
+            // 5. Xử lý Logic từng lệnh
+
+            // --- TRƯỜNG HỢP 1: ĐĂNG KÝ MỚI (ONBOARDING) ---
             if ("ONBOARDING".equals(p.getCommand())) {
                 try {
                     OnboardingPayload pl = JsonUtil.fromJson(p.getPayloadJson(), OnboardingPayload.class);
+                    if (pl == null) return false;
 
-                    // [ĐIỂM CHẾT 2] Chỗ này dễ dính lỗi SQL Duplicate nếu chưa fix xong Database
-                    AuthResponse resp = authService.processOnboarding(pl, socket.getInetAddress().getHostAddress());
+                    // Gọi AuthService xử lý (Truyền IP socket để ưu tiên IP thật)
+                    String socketIp = socket.getInetAddress().getHostAddress();
+                    AuthResponse resp = authService.processOnboarding(pl, socketIp);
 
+                    // Gửi phản hồi về Client
                     sendSecure("ONBOARDING_RESPONSE", null, resp);
-                    System.out.println(">> [INFO] Onboarding thành công -> Đóng kết nối để Client login lại.");
 
-                    return false; // Trả về false để ngắt kết nối là ĐÚNG với logic Onboard (nhưng log bên ngoài sẽ báo thất bại)
+                    if (resp.isSuccess()) {
+                        System.out.println(">> [INFO] Onboarding thành công cho thiết bị: " + pl.getClientName());
+                        System.out.println(">> [INFO] Đóng kết nối để Client tự động Login lại bằng Token mới.");
+                    } else {
+                        System.err.println(">> [WARN] Onboarding thất bại: " + resp.getMessage());
+                    }
+
+                    // QUAN TRỌNG: Trả về false để ngắt kết nối socket hiện tại.
+                    // Client sẽ nhận Token, lưu vào file và tự kết nối lại bằng lệnh AUTH_DAILY.
+                    return false;
                 } catch (Exception e) {
                     System.err.println(">> [LỖI ONBOARDING] " + e.getMessage());
-                    e.printStackTrace(); // In ra xem có phải lỗi SQL không
-                    throw e;
+                    e.printStackTrace();
+                    return false;
                 }
             }
+
+            // --- TRƯỜNG HỢP 2: ĐĂNG NHẬP HÀNG NGÀY (AUTH_DAILY) ---
             else if ("AUTH_DAILY".equals(p.getCommand())) {
-                // [ĐIỂM CHẾT 3] Tìm không thấy device (Token sai hoặc database chưa có)
+                // Kiểm tra Token trong Database
                 ClientDevice dev = authService.getClientByToken(p.getToken());
 
                 if (dev != null) {
+                    // --- CẬP NHẬT IP THÔNG MINH ---
+                    String socketIp = socket.getInetAddress().getHostAddress();
+
+                    // Logic: Chỉ update nếu là IP thật (khác localhost/IPv6 loopback) và khác IP trong DB
+                    if (!socketIp.startsWith("127.") &&
+                            !socketIp.equals("0:0:0:0:0:0:0:1") &&
+                            !socketIp.equals(dev.getCurrentIp())) {
+
+                        // 1. Cập nhật vào Database
+                        ClientDeviceDAO dao = new ClientDeviceDAO();
+                        dao.updateIp(dev.getClientId(), socketIp); // Đảm bảo DAO có hàm updateIp
+
+                        // 2. Cập nhật vào Object trong RAM (để UI Server hiển thị đúng ngay lập tức)
+                        dev.setCurrentIp(socketIp);
+
+                        System.out.println(">> [Info] Đã cập nhật IP mới cho " + dev.getClientName() + ": " + socketIp);
+                    }
+                    // -----------------------------
+
                     // Khởi tạo Session
-                    session = new ClientSession(dev.getClientId(), dev.getGroupId(), socket, dos); // Đã sửa null -> dos
+                    session = new ClientSession(dev.getClientId(), dev.getGroupId(), socket, dos);
                     session.setHostname(dev.getClientName());
                     session.setMacAddress(dev.getMacAddress());
-                    session.setIpAddress(socket.getInetAddress().getHostAddress());
+                    session.setIpAddress(dev.getCurrentIp()); // Lấy IP chuẩn từ Object dev
 
+                    // Thêm vào quản lý session
                     sessionMgr.add(session);
+
+                    // Gửi thông báo thành công
                     sendSecure("AUTH_SUCCESS", null, "Access Granted");
-                    System.out.println(">> [SUCCESS] Thiết bị " + dev.getClientName() + " đã kết nối.");
-                    return true; // OK -> Giữ kết nối
+                    System.out.println(">> [SUCCESS] Thiết bị " + dev.getClientName() + " (ID: " + dev.getClientId() + ") đã kết nối.");
+
+                    return true; // Trả về true để giữ kết nối và chuyển sang vòng lặp lắng nghe lệnh
                 } else {
-                    System.err.println(">> [LỖI] Token không tồn tại hoặc sai: " + p.getToken());
+                    System.err.println(">> [LỖI] Token không tồn tại hoặc đã bị thu hồi: " + p.getToken());
                     sendSecure("AUTH_FAILED", null, "Invalid Token");
                     return false;
                 }
-            } else {
-                System.err.println(">> [LỖI] Lệnh lạ trong Handshake: " + p.getCommand());
+            }
+
+            // --- TRƯỜNG HỢP KHÁC: LỆNH KHÔNG HỢP LỆ ---
+            else {
+                System.err.println(">> [LỖI] Lệnh lạ trong quá trình Handshake: " + p.getCommand());
                 return false;
             }
 
         } catch (Exception e) {
-            System.err.println(">> [CRITICAL] Lỗi trong quá trình Handshake: " + e.getMessage());
+            System.err.println(">> [CRITICAL] Lỗi ngoại lệ trong Handshake: " + e.getMessage());
             e.printStackTrace();
             return false;
         }

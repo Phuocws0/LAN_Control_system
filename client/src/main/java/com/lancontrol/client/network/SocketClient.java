@@ -70,9 +70,9 @@ public class SocketClient {
         stopOldThreads();
         closeResources();
 
-        System.out.println(">> [Client] Đang kết nối đến Server...");
+        System.out.println(">> [Client] Đang kết nối đến Server..." + cfg.getServerIp());
         // 1. Khởi tạo Socket
-        this.s = new Socket("127.0.0.1", 9999); // IP Server của bạn
+        this.s = new Socket(cfg.getServerIp(), 9999); // IP Server của bạn
         this.s.setSoTimeout(60000);
         this.s.setTcpNoDelay(true);
 
@@ -105,7 +105,14 @@ public class SocketClient {
             cfg.saveToken(null);
         }
     }
-
+    public void close() {
+        this.auth = false; // Ngừng vòng lặp heartbeat
+        try {
+            if (s != null && !s.isClosed()) {
+                s.close(); // Đóng socket -> Vòng lặp listen() sẽ văng Exception và thread sẽ kết thúc
+            }
+        } catch (Exception e) {}
+    }
     // --- CƠ CHẾ GỬI DỮ LIỆU BINARY ---
 
     private void sendSecure(String command, String token, Object payload) {
@@ -207,12 +214,22 @@ public class SocketClient {
         String jsonRaw = new String(data, StandardCharsets.UTF_8);
         NetworkPacket resp = gson.fromJson(jsonRaw, NetworkPacket.class);
 
-        // Kiểm tra xem Server có báo AUTH_SUCCESS không
-        if (resp != null && "AUTH_SUCCESS".equals(resp.getCommand())) {
-            this.auth = true;
-        } else {
-            this.auth = false;
+        if (resp != null) {
+            if ("AUTH_SUCCESS".equals(resp.getCommand())) {
+                this.auth = true;
+                return; // Auth thành công, thoát hàm
+            } else if ("AUTH_FAILED".equals(resp.getCommand())) {
+                // CHỈ XÓA TOKEN KHI SERVER BẢO SAI
+                System.err.println(">> [Client] Server báo Token không đúng -> Xóa để đăng ký lại.");
+                cfg.saveToken(null);
+                this.auth = false;
+                return;
+            }
         }
+
+        // Các trường hợp khác (Server lỗi, mạng lag...) -> KHÔNG XÓA TOKEN
+        this.auth = false;
+        System.err.println(">> [Client] Auth thất bại do lỗi mạng hoặc Server, giữ lại Token thử lại sau.");
     }
 
     // --- VÒNG LẶP NHẬN LỆNH ---

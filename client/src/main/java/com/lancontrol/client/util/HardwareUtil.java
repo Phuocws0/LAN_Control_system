@@ -4,6 +4,7 @@ import oshi.SystemInfo;
 import oshi.hardware.HardwareAbstractionLayer;
 import oshi.hardware.NetworkIF;
 
+import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.util.Enumeration;
@@ -14,23 +15,44 @@ public class HardwareUtil {
     private static final HardwareAbstractionLayer hal = si.getHardware();
 
     public static String getLocalIpAddress() {
+        String bestIp = "127.0.0.1";
+        int maxScore = 0;
+
         try {
+            // CÁCH 1: Hỏi Google DNS (Chính xác 99%)
+            try (final DatagramSocket socket = new DatagramSocket()) {
+                socket.connect(InetAddress.getByName("8.8.8.8"), 10002);
+                String ip = socket.getLocalAddress().getHostAddress();
+                if (ip != null && !ip.startsWith("127.")) return ip;
+            } catch (Exception e) {}
+
+            // CÁCH 2: Duyệt và chấm điểm
             Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
             while (interfaces.hasMoreElements()) {
                 NetworkInterface iface = interfaces.nextElement();
-                if (iface.isLoopback() || !iface.isUp()) continue;
+                if (!iface.isUp() || iface.isLoopback()) continue;
+                if (iface.getDisplayName().toLowerCase().contains("docker") ||
+                        iface.getDisplayName().toLowerCase().contains("virtual")) continue;
+
                 Enumeration<InetAddress> addresses = iface.getInetAddresses();
                 while (addresses.hasMoreElements()) {
                     InetAddress addr = addresses.nextElement();
-                    if (addr.isSiteLocalAddress()) {
-                        return addr.getHostAddress();
+                    String ip = addr.getHostAddress();
+                    if (ip.contains(":")) continue; // Bỏ IPv6
+
+                    int score = 0;
+                    if (ip.startsWith("192.168.")) score = 10; // Ưu tiên 1
+                    else if (ip.startsWith("10.")) score = 9;  // Ưu tiên 2
+                    else if (!ip.startsWith("127.")) score = 5;
+
+                    if (score > maxScore) {
+                        maxScore = score;
+                        bestIp = ip;
                     }
                 }
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return "Unknown-IP";
+        } catch (Exception e) {}
+        return bestIp;
     }
 
     public static String getMacAddress() {
