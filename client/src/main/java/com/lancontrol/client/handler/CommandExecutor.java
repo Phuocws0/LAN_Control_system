@@ -3,9 +3,9 @@ public class CommandExecutor {
     public void shutdown() {
         String os = System.getProperty("os.name").toLowerCase();
         if (os.contains("win")) {
-            exec("shutdown -s -t 5"); // Tắt máy sau 5 giây trên Windows [cite: 181]
+            exec("shutdown -s -t 5");
         } else {
-            exec("shutdown -h now"); // Tắt máy ngay lập tức trên Linux/Mac
+            exec("shutdown -h now");
         }
     }    public void restart() { exec("shutdown -r -t 5"); }
     private void exec(String cmd) {

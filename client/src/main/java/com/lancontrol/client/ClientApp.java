@@ -20,9 +20,6 @@ public class ClientApp extends Application {
     private ConfigManager config;
     private SocketClient socketClient;
     private Thread clientThread;
-    public static void main(String[] args) {
-        launch(args);
-    }
 
     @Override
     public void start(Stage primaryStage) {
@@ -35,6 +32,7 @@ public class ClientApp extends Application {
             showSetupWindow(primaryStage);
         }
     }
+
 
     private void showSetupWindow(Stage stage) {
         VBox root = new VBox(15);
@@ -60,12 +58,10 @@ public class ClientApp extends Application {
             File selectedFile = fileChooser.showOpenDialog(stage);
 
             if (selectedFile != null) {
-                boolean success = config.importKeyFile(selectedFile);
-                if (success) {
+                if (config.importKeyFile(selectedFile)) {
                     Alert alert = new Alert(Alert.AlertType.INFORMATION, "Cấu hình thành công! Máy sẽ kết nối tới: " + config.getServerIp());
                     alert.showAndWait();
 
-                    // Chuyển sang chạy service
                     startBackgroundService();
                     showStatusWindow(stage);
                 } else {
@@ -75,10 +71,8 @@ public class ClientApp extends Application {
         });
 
         root.getChildren().addAll(lblTitle, lblInstruction, btnSelect, lblStatus);
-        Scene scene = new Scene(root, 350, 200);
-
         stage.setTitle("LanControl Client Setup");
-        stage.setScene(scene);
+        stage.setScene(new Scene(root, 350, 200));
         stage.show();
     }
 
@@ -91,9 +85,9 @@ public class ClientApp extends Application {
         lblStatus.setStyle("-fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: green;");
 
         Label lblIp = new Label("Server IP: " + config.getServerIp());
-        Label lblGroup = new Label("Key hiện tại: ... " + (config.getKey() != null && config.getKey().length() > 5 ? config.getKey().substring(0, 5) : "N/A"));
+        String key = config.getKey();
+        Label lblGroup = new Label("Key hiện tại: ... " + (key != null && key.length() > 5 ? key.substring(0, 5) : "N/A"));
 
-        // NÚT NHẬP KEY MỚI
         Button btnChangeKey = new Button("🔄 Đổi Nhóm / Nhập Key Mới");
         btnChangeKey.setStyle("-fx-background-color: #2196F3; -fx-text-fill: white; -fx-cursor: hand;");
 
@@ -104,72 +98,64 @@ public class ClientApp extends Application {
             File selectedFile = fileChooser.showOpenDialog(stage);
 
             if (selectedFile != null) {
-                // 1. Nạp file mới
-                boolean success = config.importKeyFile(selectedFile);
-                if (success) {
-                    // 2. QUAN TRỌNG: Xóa Token cũ để ép đăng ký lại
+                if (config.importKeyFile(selectedFile)) {
                     config.saveToken(null);
-
-                    // 3. Khởi động lại Service
                     restartBackgroundService();
 
-                    // Cập nhật giao diện
                     lblIp.setText("Server IP: " + config.getServerIp());
                     lblGroup.setText("Key mới: ... " + config.getKey().substring(0, 5));
 
-                    Alert alert = new Alert(Alert.AlertType.INFORMATION, "Đã cập nhật Key mới! Client đang kết nối lại...");
-                    alert.show();
+                    new Alert(Alert.AlertType.INFORMATION, "Đã cập nhật Key mới! Client đang kết nối lại...").show();
                 } else {
-                    Alert alert = new Alert(Alert.AlertType.ERROR, "File Key không hợp lệ!");
-                    alert.show();
+                    new Alert(Alert.AlertType.ERROR, "File Key không hợp lệ!").show();
                 }
             }
         });
 
         root.getChildren().addAll(lblStatus, lblIp, lblGroup, btnChangeKey);
-
-        stage.setScene(new Scene(root, 350, 200));
         stage.setTitle("LanControl Client");
+        stage.setScene(new Scene(root, 350, 200));
         stage.show();
     }
-    private void restartBackgroundService() {
-        System.out.println(">> [ClientApp] Đang khởi động lại dịch vụ...");
 
-        // Ngắt kết nối cũ (nếu SocketClient có hàm stop/close thì gọi ở đây)
-        // Cách đơn giản nhất: Vì SocketClient chạy while(true), ta cần cơ chế dừng nó.
-        // Tuy nhiên, vì Thread.stop() bị deprecated, cách an toàn là interrupt
-        // hoặc để đơn giản cho bạn: Ta chỉ cần tạo luồng mới, luồng cũ sẽ tự chết khi socket timeout hoặc lỗi auth.
 
-        // Tốt nhất: SocketClient nên có hàm shutdown() để đóng socket.
-        // Giả sử SocketClient của bạn có biến 'Socket s', ta ép đóng nó.
-        if (socketClient != null) {
-            socketClient.close();
-        }
-
-        // Ngắt luồng cũ
-        if (clientThread != null) {
-            clientThread.interrupt();
-        }
-
-        // Chạy luồng mới
-        startBackgroundService();
-    }
     private void startBackgroundService() {
-        // Chạy SocketClient trên luồng riêng để không treo UI
-        new Thread(() -> {
+        clientThread = new Thread(() -> {
             try {
-                // Đảm bảo SocketClient của bạn đã dùng code mới (lấy IP từ config)
                 socketClient = new SocketClient();
                 socketClient.start();
             } catch (Exception e) {
                 e.printStackTrace();
             }
-        }).start();
+        });
+        clientThread.setDaemon(true);
+        clientThread.start();
     }
+
+    private void restartBackgroundService() {
+        System.out.println(">> [ClientApp] Đang khởi động lại dịch vụ...");
+
+        if (socketClient != null) {
+            socketClient.close();
+        }
+        if (clientThread != null) {
+            clientThread.interrupt();
+        }
+
+        startBackgroundService();
+    }
+
 
     @Override
     public void stop() throws Exception {
+        if (socketClient != null) {
+            socketClient.close();
+        }
         super.stop();
-        System.exit(0); // Đảm bảo tắt hết luồng khi đóng app
+        System.exit(0);
+    }
+
+    public static void main(String[] args) {
+        launch(args);
     }
 }

@@ -200,4 +200,18 @@ public class ClientDeviceDAO {
         return list;
     }
 
+    public void updateDeviceGroupAndIp(int cid, Integer integer, String currentIp) {
+        String sql = "UPDATE client_devices SET group_id = ?, current_ip = ? WHERE client_id = ?";
+        try (Connection conn = JDBCUtil.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, integer);
+            ps.setString(2, currentIp);
+            ps.setInt(3, cid);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
 }

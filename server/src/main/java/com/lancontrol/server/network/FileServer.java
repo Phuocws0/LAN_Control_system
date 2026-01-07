@@ -10,7 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class FileServer {
     private static final int FILE_PORT = 9998;
     private final Map<String, File> pendingFiles = new ConcurrentHashMap<>();
-    private final AuthService authService; // Thêm dịch vụ xác thực [cite: 510]
+    private final AuthService authService;
 
     public FileServer(AuthService authService) {
         this.authService = authService;

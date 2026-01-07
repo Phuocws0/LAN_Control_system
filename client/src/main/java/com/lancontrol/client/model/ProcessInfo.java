@@ -3,12 +3,11 @@ package com.lancontrol.client.model; // Hoặc package model chung của bạn
 public class ProcessInfo {
     private int pid;
     private String name;
-    private double cpuUsage;    // Đổi tên cho khớp logic Server
-    private double memoryUsage; // Đổi tên từ memoryUsageMb -> memoryUsage
+    private double cpuUsage;
+    private double memoryUsage;
 
     public ProcessInfo() {}
 
-    // Getter/Setter phải đặt đúng chuẩn CamelCase để JavaFX tìm thấy
     public int getPid() { return pid; }
     public void setPid(int pid) { this.pid = pid; }
 

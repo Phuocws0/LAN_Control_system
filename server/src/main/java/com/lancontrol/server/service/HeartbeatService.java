@@ -20,8 +20,9 @@ public class HeartbeatService {
             listener.onHeartbeatReceived(cid, hb);
         }
     }
+    //ham xu ly heartbeat va thong bao cho cac listener
     public void processHeartbeat(int clientId, HeartbeatModel hb) {
-        // Duyệt qua danh sách và báo cho các listener (như ServerController) cập nhật UI
+        dao.updateHeartbeat(clientId, hb);
         for (HeartbeatListener listener : listeners) {
             listener.onHeartbeatReceived(clientId, hb);
         }

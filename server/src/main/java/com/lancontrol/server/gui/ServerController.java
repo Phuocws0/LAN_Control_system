@@ -30,12 +30,11 @@ import java.util.Map;
 import java.util.Optional;
 
 public class ServerController implements ScreenDataListener, HeartbeatListener, ProcessDataListener {
-
-    // --- CÁC THÀNH PHẦN FXML (Khớp với file FXML bạn gửi) ---
+    // --- FXML UI COMPONENTS ---
     @FXML private Label cpuLabel, ramLabel, diskLabel, networkLabel, nameLabel, macLabel, ipLabel;
-    @FXML private VBox deviceListContainer; // Danh sách máy dạng text bên trái (nếu cần dùng)
-    @FXML private VBox groupContainer;      // Danh sách nhóm bên trái
-    @FXML private GridPane myGrid;          // Lưới hiển thị máy trạm ở giữa
+    @FXML private VBox deviceListContainer;
+    @FXML private VBox groupContainer;
+    @FXML private GridPane myGrid;
     @FXML private Label osLabel, cpuModelLabel, ramTotalLabel, diskTotalLabel;
 
     // --- SERVICES ---
@@ -45,10 +44,10 @@ public class ServerController implements ScreenDataListener, HeartbeatListener, 
     private final HeartbeatService heartbeatService;
 
     // --- STATE ---
-    private Integer selectedGroupId = null; // ID nhóm đang chọn (null = Tất cả)
-    private Integer selectedClientId = null; // ID máy đang chọn
+    private Integer selectedGroupId = null;
+    private Integer selectedClientId = null;
 
-    // --- QUẢN LÝ CỬA SỔ CON & UPDATE UI ---
+    // --- quan ly cua so va update UI ---
     private final Map<Integer, FileExplorerController> activeFileExplorers = new HashMap<>();
     private final Map<Integer, ProcessController> activeProcessWindows = new HashMap<>();
     private final Map<Integer, ScreenController> activeScreens = new HashMap<>();
@@ -64,42 +63,28 @@ public class ServerController implements ScreenDataListener, HeartbeatListener, 
         this.groupService = gs;
         this.heartbeatService = hs;
     }
-
+    // ham khoi tao
     @FXML
     public void initialize() {
-        // Đăng ký nhận sự kiện
         commandService.addScreenListener(this);
         commandService.addProcessListener(this);
         heartbeatService.addListener(this);
-
-        // Tải dữ liệu lần đầu
         refreshGroupList();
         loadClientList();
-
         System.out.println(">> [UI] Giao diện quản trị đã khởi tạo.");
     }
-
-    // =========================================================================
-    // 1. QUẢN LÝ NHÓM (HIỂN THỊ & SỰ KIỆN)
-    // =========================================================================
-
+    // list nhom
     private void refreshGroupList() {
         Platform.runLater(() -> {
             groupContainer.getChildren().clear();
-
-            // A. NÚT "TẤT CẢ"
             Button btnAll = createGroupButton("Tất cả thiết bị", null);
             groupContainer.getChildren().add(btnAll);
             groupContainer.getChildren().add(new Separator());
-
-            // B. DANH SÁCH NHÓM TỪ DB
             Map<Integer, String> groups = groupService.getAllGroups();
             for (Map.Entry<Integer, String> entry : groups.entrySet()) {
                 Button btn = createGroupButton(entry.getValue(), entry.getKey());
                 groupContainer.getChildren().add(btn);
             }
-
-            // C. NÚT TẠO KEY (Chỉ hiện khi chọn 1 nhóm cụ thể)
             if (selectedGroupId != null) {
                 Separator sep = new Separator();
                 Button btnGenKey = new Button("🔑 Tạo Key cho nhóm này");
@@ -116,8 +101,6 @@ public class ServerController implements ScreenDataListener, HeartbeatListener, 
         btn.setMaxWidth(Double.MAX_VALUE);
         btn.setCursor(javafx.scene.Cursor.HAND);
         btn.setPadding(new javafx.geometry.Insets(8));
-
-        // Tô màu nếu đang chọn
         boolean isActive = (selectedGroupId == null && groupId == null) ||
                 (selectedGroupId != null && selectedGroupId.equals(groupId));
 
@@ -126,15 +109,11 @@ public class ServerController implements ScreenDataListener, HeartbeatListener, 
         } else {
             btn.setStyle("-fx-alignment: CENTER_LEFT; -fx-background-color: transparent; -fx-text-fill: black;");
         }
-
-        // Sự kiện Click trái: Lọc máy
         btn.setOnAction(e -> {
             this.selectedGroupId = groupId;
             refreshGroupList(); // Update màu nút
             loadClientList();   // Load lại máy
         });
-
-        // Sự kiện Chuột phải: Xóa nhóm
         if (groupId != null) {
             ContextMenu ctx = new ContextMenu();
             MenuItem delItem = new MenuItem("🗑 Xóa nhóm này (Revoke All)");
@@ -155,56 +134,40 @@ public class ServerController implements ScreenDataListener, HeartbeatListener, 
 
         return btn;
     }
-
-    // =========================================================================
-    // 2. HIỂN THỊ DANH SÁCH MÁY (GRID VIEW)
-    // =========================================================================
-
+    // load danh sach client
     private void loadClientList() {
         Platform.runLater(() -> {
-            // 1. Dọn dẹp giao diện cũ (Cả Grid giữa và List trái)
             myGrid.getChildren().clear();
-            deviceListContainer.getChildren().clear(); // <--- QUAN TRỌNG: Xóa list bên trái cũ
-
+            deviceListContainer.getChildren().clear();
             clientViews.clear();
             clientContainers.clear();
-
-            // 2. Lấy dữ liệu từ Database
             List<ClientDevice> devices;
             if (selectedGroupId == null) devices = deviceDAO.getAllClients();
             else devices = deviceDAO.getClientsByGroup(selectedGroupId);
-
             if (devices.isEmpty()) {
                 myGrid.add(new Label("Không có thiết bị."), 0, 0);
                 deviceListContainer.getChildren().add(new Label("(Trống)"));
                 return;
             }
-
             int index = 0;
             for (ClientDevice dev : devices) {
-                // A. VẼ LÊN GRID (Ở GIỮA)
+                // tao card ui cho tung client
                 VBox card = createClientCardUI(dev);
                 myGrid.add(card, index % 4, index / 4);
                 index++;
-
-                // B. VẼ LÊN SIDEBAR (BÊN TRÁI) - CHỈ MÁY ONLINE
-                // Kiểm tra xem máy có đang kết nối không
+                // cap nhat sidebar
                 boolean isOnline = sessionManager.get(dev.getClientId()) != null;
 
                 if (isOnline) {
                     Button btnSidebar = new Button("● " + dev.getClientName());
                     btnSidebar.setMaxWidth(Double.MAX_VALUE);
-                    // Style: Chữ xanh lá, căn trái, chuột dạng bàn tay
                     btnSidebar.setStyle("-fx-background-color: transparent; -fx-alignment: CENTER_LEFT; -fx-text-fill: #2e7d32; -fx-cursor: hand; -fx-font-weight: bold; -fx-font-size: 12px;");
-
-                    // Bấm vào tên bên trái thì cũng chọn máy đó (giống bấm vào Grid)
                     btnSidebar.setOnAction(e -> selectClient(dev.getClientId()));
 
                     deviceListContainer.getChildren().add(btnSidebar);
                 }
             }
 
-            // Nếu không có máy nào online
             if (deviceListContainer.getChildren().isEmpty()) {
                 Label lbl = new Label("(Không có máy online)");
                 lbl.setStyle("-fx-text-fill: #999; -fx-padding: 5; -fx-font-size: 11px;");
@@ -212,20 +175,19 @@ public class ServerController implements ScreenDataListener, HeartbeatListener, 
             }
         });
     }
-
+    // tao card ui cho client
     private VBox createClientCardUI(ClientDevice dev) {
         // Thumbnail
-        ImageView iv = new ImageView(); // Cần set ảnh mặc định nếu muốn
+        ImageView iv = new ImageView();
         iv.setFitWidth(140);
         iv.setPreserveRatio(true);
         clientViews.put(dev.getClientId(), iv);
-
-        // Thông tin
+        // Load anh mac dinh
         Label lblName = new Label(dev.getClientName());
         lblName.setStyle("-fx-font-weight: bold;");
         Label lblIp = new Label(dev.getCurrentIp());
 
-        // Trạng thái Online (Check qua SessionManager)
+        // trang thai online/offline
         boolean isOnline = sessionManager.get(dev.getClientId()) != null;
         Label lblStatus = new Label(isOnline ? "● Online" : "○ Offline");
         lblStatus.setStyle("-fx-text-fill: " + (isOnline ? "green" : "red") + "; -fx-font-size: 10px;");
@@ -237,12 +199,12 @@ public class ServerController implements ScreenDataListener, HeartbeatListener, 
         card.setStyle("-fx-padding: 10; -fx-background-color: white; -fx-border-color: " + borderColor + "; -fx-border-radius: 5; -fx-cursor: hand;");
         card.getChildren().addAll(iv, lblName, lblIp, lblStatus);
 
-        // Click trái: Chọn máy
+        //chuot trai: chon client
         card.setOnMouseClicked(e -> {
             if (e.getButton() == javafx.scene.input.MouseButton.PRIMARY) selectClient(dev.getClientId());
         });
 
-        // Chuột phải: Menu chức năng
+        //chuot phai: context menu
         ContextMenu ctx = new ContextMenu();
 
         MenuItem itemRemote = new MenuItem("Điều khiển");
@@ -265,28 +227,18 @@ public class ServerController implements ScreenDataListener, HeartbeatListener, 
         clientContainers.put(dev.getClientId(), card);
         return card;
     }
-
-    // =========================================================================
-    // 3. XỬ LÝ SỰ KIỆN CLICK VÀ CẬP NHẬT CHI TIẾT
-    // =========================================================================
-
+    // chon client
     private void selectClient(int clientId) {
-        // Reset style máy cũ
         if (selectedClientId != null && clientContainers.containsKey(selectedClientId)) {
-            // Lấy lại trạng thái online để trả về màu border đúng
             boolean online = sessionManager.get(selectedClientId) != null;
             String color = online ? "#4caf50" : "#ef5350";
             clientContainers.get(selectedClientId).setStyle("-fx-padding: 10; -fx-background-color: white; -fx-border-color: " + color + "; -fx-border-radius: 5; -fx-cursor: hand;");
         }
 
         this.selectedClientId = clientId;
-
-        // Highlight máy mới
         if (clientContainers.containsKey(clientId)) {
             clientContainers.get(clientId).setStyle("-fx-padding: 9; -fx-background-color: #e3f2fd; -fx-border-color: #2196F3; -fx-border-width: 2; -fx-cursor: hand;");
         }
-
-        // Cập nhật Panel bên phải
         ClientSession session = sessionManager.get(clientId);
         Optional<ClientDevice> devOpt = deviceDAO.getClientById(clientId);
         if (devOpt.isPresent()) {
@@ -303,7 +255,6 @@ public class ServerController implements ScreenDataListener, HeartbeatListener, 
             ipLabel.setText("IP: " + session.getIpAddress());
             macLabel.setText("MAC: " + session.getMacAddress());
         } else {
-            // Nếu offline thì lấy từ DB (cần thêm hàm getById trong DAO, tạm thời để trống)
             nameLabel.setText("Name: (Offline)");
         }
         resetDynamicLabels();
@@ -320,17 +271,13 @@ public class ServerController implements ScreenDataListener, HeartbeatListener, 
         diskLabel.setText("DISK: --"); networkLabel.setText("NET: --");
     }
 
-    // =========================================================================
-    // 4. NHẬN DỮ LIỆU REAL-TIME (Screen, Heartbeat)
-    // =========================================================================
-
+    // nhan du lieu tu client
     @Override
     public void onScreenFrameReceived(int clientId, byte[] imageBytes) {
         if (imageBytes == null) return;
         if (activeScreens.containsKey(clientId)) activeScreens.get(clientId).updateFrame(imageBytes);
 
         Platform.runLater(() -> {
-            // Chỉ cập nhật Thumbnail nếu máy đó đang hiển thị trên Grid
             if (clientViews.containsKey(clientId)) {
                 clientViews.get(clientId).setImage(new Image(new ByteArrayInputStream(imageBytes)));
             }
@@ -356,10 +303,7 @@ public class ServerController implements ScreenDataListener, HeartbeatListener, 
         }
     }
 
-    // =========================================================================
-    // 5. CÁC NÚT CHỨC NĂNG (FXML ACTIONS)
-    // =========================================================================
-
+    // them nhom moi
     @FXML public void onAddGroup() {
         TextInputDialog dialog = new TextInputDialog();
         dialog.setTitle("Tạo Nhóm");
@@ -374,21 +318,21 @@ public class ServerController implements ScreenDataListener, HeartbeatListener, 
             }
         });
     }
-
+    // xem tu xa, quan ly tien trinh, file explorer
     @FXML public void onControlClick() { openWindow("/screen_view.fxml", "Remote View", (id, l) -> commandService.startScreenStream(id, true)); }
     @FXML public void onProcessClick() { openWindow("/process_view.fxml", "Process Manager", (id, l) -> commandService.requestProcessList(id)); }
     @FXML public void onFileExplorerClick() { openWindow("/file_manager.fxml", "File Explorer", (id, l) -> commandService.requestFileTree(id, "")); }
-
+    // gui file den client
     @FXML public void onSendFileClick() {
         if (selectedClientId == null) return;
         javafx.stage.FileChooser fc = new javafx.stage.FileChooser();
         File f = fc.showOpenDialog(null);
         if (f != null) commandService.sendDownloadRequest(selectedClientId, f);
     }
-
+    // gui lenh shutdown, sleep
     @FXML public void onShutdownClick() { if (selectedClientId != null) confirmAction("Tắt máy?", () -> commandService.sendShutdown(selectedClientId)); }
     @FXML public void onSleepClick() { if (selectedClientId != null) commandService.sendSleep(selectedClientId); }
-
+    // tao key cho nhom
     private void onGenerateKeyForSelectedGroup() {
         if (selectedGroupId == null) return;
         String name = groupService.getAllGroups().get(selectedGroupId);
@@ -402,14 +346,13 @@ public class ServerController implements ScreenDataListener, HeartbeatListener, 
         }
     }
 
-    // Helper mở cửa sổ con
+    // mo cua so moi
     private void openWindow(String fxml, String title, java.util.function.BiConsumer<Integer, FXMLLoader> onLoaded) {
         if (selectedClientId == null) return;
         try {
             FXMLLoader loader = new FXMLLoader(getClass().getResource(fxml));
             Parent root = loader.load();
 
-            // Xử lý init data cho controller con (cần ép kiểu tùy controller)
             if (fxml.contains("screen")) {
                 ScreenController sc = loader.getController();
                 sc.initData(selectedClientId, "Client " + selectedClientId);
@@ -430,7 +373,6 @@ public class ServerController implements ScreenDataListener, HeartbeatListener, 
             stage.setScene(new Scene(root));
             stage.show();
 
-            // Callback để gửi lệnh start stream/request list
             if (onLoaded != null) onLoaded.accept(selectedClientId, loader);
 
         } catch (IOException e) { showError("Lỗi mở cửa sổ: " + e.getMessage()); }

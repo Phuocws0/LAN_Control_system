@@ -19,14 +19,14 @@ public class HardwareUtil {
         int maxScore = 0;
 
         try {
-            // CÁCH 1: Hỏi Google DNS (Chính xác 99%)
+            // ket noi den mot dia chi ngoai de lay ip dia phuong
             try (final DatagramSocket socket = new DatagramSocket()) {
                 socket.connect(InetAddress.getByName("8.8.8.8"), 10002);
                 String ip = socket.getLocalAddress().getHostAddress();
                 if (ip != null && !ip.startsWith("127.")) return ip;
             } catch (Exception e) {}
 
-            // CÁCH 2: Duyệt và chấm điểm
+            // Duyet tat ca cac NetworkInterface
             Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
             while (interfaces.hasMoreElements()) {
                 NetworkInterface iface = interfaces.nextElement();
@@ -38,11 +38,11 @@ public class HardwareUtil {
                 while (addresses.hasMoreElements()) {
                     InetAddress addr = addresses.nextElement();
                     String ip = addr.getHostAddress();
-                    if (ip.contains(":")) continue; // Bỏ IPv6
+                    if (ip.contains(":")) continue;
 
                     int score = 0;
-                    if (ip.startsWith("192.168.")) score = 10; // Ưu tiên 1
-                    else if (ip.startsWith("10.")) score = 9;  // Ưu tiên 2
+                    if (ip.startsWith("192.168.")) score = 10;
+                    else if (ip.startsWith("10.")) score = 9;
                     else if (!ip.startsWith("127.")) score = 5;
 
                     if (score > maxScore) {

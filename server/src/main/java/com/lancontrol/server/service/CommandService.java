@@ -24,7 +24,6 @@ public class CommandService {
     private final FileServer fileServer;
     private final Gson gson = new Gson();
 
-    // Quản lý danh sách các Listener đăng ký nhận dữ liệu
     private final Map<Integer, FileExplorerController> activeFileExplorers = new HashMap<>();
 
     private final List<ScreenDataListener> screenListeners = new CopyOnWriteArrayList<>();
@@ -37,14 +36,12 @@ public class CommandService {
         this.mgr = m;
         this.fileServer = fs;
         try {
-            // Khởi tạo Robot phục vụ tính năng Broadcast màn hình Server
             this.serverScreen = new ServerScreenService();
         } catch (Exception e) {
             throw new RuntimeException("Không khởi tạo được Robot Server", e);
         }
     }
 
-    // --- CƠ CHẾ ĐĂNG KÝ LISTENER ---
 
     public void addScreenListener(ScreenDataListener listener) {
         screenListeners.add(listener); //
@@ -53,9 +50,7 @@ public class CommandService {
     public void addProcessListener(ProcessDataListener listener) {
         processListeners.add(listener);
     }
-
-    // --- CƠ CHẾ GỬI BẢO MẬT TRUNG TÂM (AES + HMAC + Sequence) ---
-
+    // gui lenh den client voi co che bao mat
     public void sendSecure(int cid, String cmd, Object payload) {
         ClientSession session = mgr.get(cid);
         if (session == null) return;
@@ -71,8 +66,6 @@ public class CommandService {
 
             String signData = cmd + p.getPayloadJson() + p.getTimestamp() + p.getSequenceNumber();
             p.setHmac(SecurityUtil.generateHMAC(signData));
-
-            // session.send bây giờ sẽ bọc dữ liệu vào khung Binary Type 0x01
             session.send(JsonUtil.toJson(p));
 
         } catch (Exception e) {
@@ -81,40 +74,30 @@ public class CommandService {
     }
     public void onScreenFrameReceived(int clientId, byte[] imageBytes) {
         if (imageBytes == null || imageBytes.length == 0) return;
-
-        // Phân phối ảnh tới tất cả các UI đang lắng nghe (Thumbnail hoặc Streaming)
         for (ScreenDataListener listener : screenListeners) {
             listener.onScreenFrameReceived(clientId, imageBytes);
         }
     }
 
     public void sendDownloadRequest(int clientId, File localFile) {
-        // 1. Tạo ID duy nhất cho tệp để Client truy vấn
         String fileId = UUID.randomUUID().toString();
-
-        // 2. Đăng ký tệp vào FileServer để chờ Client kết nối
         fileServer.registerFile(fileId, localFile);
 
-        // 3. Đóng gói thông tin tệp gửi qua lệnh JSON [cite: 809, 906]
         FileTransferRequest req = new FileTransferRequest(fileId, localFile.getName(), localFile.length());
 
-        // 4. Gửi lệnh REQ_DOWNLOAD_FILE tới Client [cite: 292, 296]
         sendSecure(clientId, "REQ_DOWNLOAD_FILE", req);
         System.out.println(">> [Server] Đã gửi yêu cầu tải file tới Client " + clientId + ": " + localFile.getName());
     }
-
-    // --- XỬ LÝ PHẢN HỒI TỪ CLIENT (Dữ liệu về) ---
-
+    // xu ly phan hoi tu client
     public void handleClientResponse(int clientId, NetworkPacket pkt) {
         String cmd = pkt.getCommand();
-        // PayloadJson đã được giải mã AES ở tầng Network trước khi gọi hàm này
+        // lay du lieu payload da giai ma
         String jsonPayload = pkt.getPayloadJson();
 
         switch (cmd) {
             case "PROCESS_LIST_RESPONSE":
-                handleProcessData(clientId, jsonPayload); // Xử lý danh sách tiến trình
+                handleProcessData(clientId, jsonPayload);
                 break;
-
             case "FILE_TREE_RESPONSE":
                 System.out.println("[INFO] Nhận File Tree từ Client " + clientId);
                 System.out.println("[DEBUG] Raw JSON Payload: " + jsonPayload);
@@ -141,19 +124,18 @@ public class CommandService {
             case "PROCESS_KILL_RESPONSE":
                 Map res = gson.fromJson(jsonPayload, Map.class);
                 String status = (String) res.get("status");
-                // Bạn có thể tạo một Listener mới hoặc in log
                 System.out.println(">> [Kill Status] PID " + res.get("pid") + " : " + status);
                 break;
             default:
                 System.out.println("[WARN] Lệnh không xác định từ Client: " + cmd);
         }
     }
-
+    // xu ly du lieu hinh anh tu client
     private void handleScreenData(int clientId, String base64Data) {
         if (base64Data == null || base64Data.isEmpty()) return;
 
         try {
-            // CHỈ GIỮ LẠI các ký tự hợp lệ của Base64
+
             String cleanData = base64Data.replaceAll("[^A-Za-z0-9+/=]", "");
 
             byte[] imageBytes = Base64.getDecoder().decode(cleanData);
@@ -165,10 +147,9 @@ public class CommandService {
             System.err.println(">> [Lỗi Base64] Client " + clientId + " vẫn lỗi: " + e.getMessage());
         }
     }
-
+    // xu ly du lieu process tu client
     private void handleProcessData(int clientId, String jsonPayload) {
         try {
-            // Log để kiểm tra dữ liệu thô
             System.out.println(">> [Debug] JSON Process từ Client " + clientId + ": " + jsonPayload);
 
             Type listType = new TypeToken<List<ProcessInfo>>(){}.getType();
@@ -185,8 +166,7 @@ public class CommandService {
         }
     }
 
-    // --- MODULE 4: TÁC VỤ ĐIỀU KHIỂN ---
-
+    // send lenh shutdown den client
     public void sendShutdown(int cid) {
         Map<String, String> map = new HashMap<>();
         map.put("action", "shutdown");
@@ -215,7 +195,6 @@ public class CommandService {
     public void sendSleep(int cid) {
         sendSecure(cid, "SLEEP", null);
     }
-    // --- TÁC VỤ BROADCAST (MÀN HÌNH SERVER -> CLIENTS) ---
 
     public void startBroadcast(int groupId) {
         if (isBroadcasting) return;
@@ -241,7 +220,6 @@ public class CommandService {
         this.isBroadcasting = false;
     }
 
-    // --- MODULE 3: QUẢN LÝ NHÓM & XÁC THỰC ---
 
     public void sendMigrate(int clientId, String newToken) {
         Map<String, String> payload = new HashMap<>();
@@ -253,11 +231,9 @@ public class CommandService {
         sendSecure(clientId, "REVOKE_IDENTITY", null); //
     }
     public void requestFileUpload(int clientId, String remoteFilePath) {
-        // Gửi trực tiếp chuỗi path, không bọc vào Map
         sendSecure(clientId, "REQ_UPLOAD_FILE", remoteFilePath);
     }
     public void requestFileTree(int clientId, String path) {
-        // Nếu path null thì gửi chuỗi rỗng, không bọc thêm bất cứ thứ gì
         String payload = (path == null) ? "" : path;
         sendSecure(clientId, "GET_FILE_TREE", payload);
     }

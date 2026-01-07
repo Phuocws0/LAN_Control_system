@@ -23,27 +23,23 @@ public class ScreenController {
         Platform.runLater(() -> statusLabel.setText("Máy: " + hostname + " (ID: " + clientId + ")"));
     }
 
-    // Hàm này sẽ được gọi mỗi khi có frame ảnh mới về
+    // cap nhat frame
     public void updateFrame(byte[] imageBytes) {
         if (imageBytes == null) return;
-
-        // Sử dụng cơ chế kiểm tra để bỏ qua các Frame cũ nếu Frame mới đã tới
         Platform.runLater(() -> {
             try {
                 ByteArrayInputStream bais = new ByteArrayInputStream(imageBytes);
                 Image img = new Image(bais);
-
-                // Chỉ cập nhật nếu Image load thành công và không bị lỗi
                 if (!img.isError()) {
                     screenView.setImage(img);
                     calculateFPS();
                 }
             } catch (Exception e) {
-                // Bỏ qua frame lỗi để tránh nháy đen màn hình
+                e.printStackTrace();
             }
         });
     }
-
+    // tinh toan fps
     private void calculateFPS() {
         frameCount++;
         long now = System.currentTimeMillis();
@@ -54,8 +50,8 @@ public class ScreenController {
         }
     }
 
-    @FXML private void onRefresh() { /* Gửi lại lệnh REQ_START_SCREEN_STREAM */ }
-    @FXML private void onToggleControl() { /* Logic bật tắt điều khiển chuột */ }
+    @FXML private void onRefresh() { }
+    @FXML private void onToggleControl() { }
 
     public void setStage(Stage stage) { this.stage = stage; }
     public Stage getStage() { return stage; }

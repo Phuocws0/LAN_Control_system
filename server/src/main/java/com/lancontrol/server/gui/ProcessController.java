@@ -29,37 +29,31 @@ public class ProcessController {
     public void initialize() {
         pidCol.setCellValueFactory(new PropertyValueFactory<>("pid"));
         nameCol.setCellValueFactory(new PropertyValueFactory<>("name"));
-        cpuCol.setCellValueFactory(new PropertyValueFactory<>("cpuUsage"));   // Phải khớp tên biến ở Client
-        memCol.setCellValueFactory(new PropertyValueFactory<>("memoryUsage")); // Phải khớp tên biến ở Client
+        cpuCol.setCellValueFactory(new PropertyValueFactory<>("cpuUsage"));
+        memCol.setCellValueFactory(new PropertyValueFactory<>("memoryUsage"));
 
         processTable.setItems(masterData);
     }
 
-    /**
-     * Khởi tạo dữ liệu ban đầu cho cửa sổ (Được gọi từ ServerController)
-     */
+    // khoi tao du lieu
     public void initData(int clientId, CommandService commandService) {
         this.clientId = clientId;
         this.commandService = commandService;
     }
-
-    /**
-     * Cập nhật danh sách tiến trình từ dữ liệu Client gửi về
-     */
+    // cap nhat du lieu len bang
     public void updateTable(List<ProcessInfo> processes) {
         if (processes == null) return;
 
         Platform.runLater(() -> {
-            masterData.clear(); // Xóa dữ liệu cũ
-            masterData.addAll(processes); // Thêm dữ liệu mới
-            processTable.refresh(); // Ép bảng cập nhật giao diện
+            masterData.clear();
+            masterData.addAll(processes);
+            processTable.refresh();
             System.out.println(">> [UI] Đã hiển thị " + processes.size() + " tiến trình lên bảng.");
         });
     }
 
     @FXML
     public void onRefresh() {
-        // Gửi yêu cầu lấy danh sách mới
         if (commandService != null) {
             commandService.requestProcessList(clientId);
         }
@@ -69,10 +63,7 @@ public class ProcessController {
     public void onKillProcess() {
         ProcessInfo selected = processTable.getSelectionModel().getSelectedItem();
         if (selected != null && commandService != null) {
-            // Gửi lệnh tiêu diệt tiến trình dựa trên PID
             commandService.killProcess(clientId, selected.getPid());
-
-            // Xóa tạm thời khỏi bảng để tạo cảm giác phản hồi nhanh
             masterData.remove(selected);
         }
     }

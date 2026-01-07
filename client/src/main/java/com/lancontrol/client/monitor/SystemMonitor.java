@@ -106,7 +106,7 @@ public class SystemMonitor {
     public List<ProcessInfo> getProcesses() {
         List<ProcessInfo> list = new ArrayList<>();
 
-        // Lấy Top 20 tiến trình ăn RAM nhất
+        //lay 20 tien trinh su dung RAM nhieu nhat
         List<OSProcess> procs = os.getProcesses(null,
                 (p1, p2) -> Long.compare(p2.getResidentSetSize(), p1.getResidentSetSize()), 20);
 
@@ -114,13 +114,10 @@ public class SystemMonitor {
             ProcessInfo pi = new ProcessInfo();
             pi.setPid(p.getProcessID());
             pi.setName(p.getName());
-
-            // 1. Lấy % CPU: Cumulative mang lại giá trị chính xác hơn cho snapshot
-            // OSHI trả về 0.0 - 1.0 nên cần nhân 100
+            // tinh CPU (%)
             double cpu = p.getProcessCpuLoadCumulative() * 100;
             pi.setCpuUsage(Math.round(cpu * 10.0) / 10.0); // Làm tròn 1 chữ số thập phân
-
-            // 2. Tính RAM (MB) và dùng đúng hàm setMemoryUsage để khớp với Server
+            // tinh RAM (MB)
             double ramMb = (double) p.getResidentSetSize() / (1024 * 1024);
             pi.setMemoryUsage(Math.round(ramMb * 10.0) / 10.0);
 

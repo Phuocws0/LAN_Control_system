@@ -14,9 +14,6 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 
-/**
- * Controller xử lý giao diện duyệt file từ xa.
- */
 public class FileExplorerController {
 
     @FXML private TableView<FileNode> fileTable;
@@ -33,13 +30,11 @@ public class FileExplorerController {
     private Stage stage;
     private final ObservableList<FileNode> masterData = FXCollections.observableArrayList();
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-
+    // khoi tao bang va cac cot
     @FXML
     public void initialize() {
-        // 1. Thiết lập các cột hiển thị [cite: 900-905]
+        // cot ten
         nameCol.setCellValueFactory(new PropertyValueFactory<>("name"));
-
-        // Cột loại: Hiển thị "Thư mục" hoặc "Tệp"
         typeCol.setCellFactory(column -> new TableCell<>() {
             @Override
             protected void updateItem(String item, boolean empty) {
@@ -51,8 +46,7 @@ public class FileExplorerController {
                 }
             }
         });
-
-        // Cột kích thước: Chuyển đổi bytes sang định dạng dễ đọc (KB/MB)
+        // cot kich thuoc
         sizeCol.setCellFactory(column -> new TableCell<>() {
             @Override
             protected void updateItem(String item, boolean empty) {
@@ -69,8 +63,7 @@ public class FileExplorerController {
                 }
             }
         });
-
-        // Cột ngày: Định dạng timestamp thành chuỗi ngày tháng
+        // dinh dang cot ngay thang
         dateCol.setCellFactory(column -> new TableCell<>() {
             @Override
             protected void updateItem(String item, boolean empty) {
@@ -85,7 +78,7 @@ public class FileExplorerController {
 
         fileTable.setItems(masterData);
 
-        // 2. Xử lý sự kiện Double-Click để vào thư mục
+        // xu ly su kien double-click de vao thu muc
         fileTable.setRowFactory(tv -> {
             TableRow<FileNode> row = new TableRow<>();
             row.setOnMouseClicked(event -> {
@@ -100,9 +93,7 @@ public class FileExplorerController {
         });
     }
 
-    /**
-     * Khởi tạo dữ liệu khi mở cửa sổ.
-     */
+    // Khoi tao du lieu cho File Explorer
     public void initData(int clientId, CommandService commandService) {
         this.clientId = clientId;
         this.commandService = commandService;
@@ -110,18 +101,14 @@ public class FileExplorerController {
         requestPath("");
     }
 
-    /**
-     * Gửi lệnh yêu cầu lấy danh sách file tại đường dẫn chỉ định.
-     */
+    // gui yeu cau duong dan den client
     private void requestPath(String path) {
         statusLabel.setText("Đang tải dữ liệu...");
         commandService.sendSecure(clientId, "GET_FILE_TREE", path);
         pathField.setText(path);
     }
 
-    /**
-     * Cập nhật bảng khi nhận được phản hồi từ Client.
-     */
+   // cap nhat file explorer voi danh sach file moi
     public void updateBrowser(List<FileNode> nodes) {
         if (nodes == null) return;
         Platform.runLater(() -> {
@@ -141,17 +128,17 @@ public class FileExplorerController {
         String currentPath = pathField.getText();
         if (currentPath == null || currentPath.isEmpty()) return;
 
-        // Xử lý lấy đường dẫn thư mục cha
+       // lay duong dan cha
         java.io.File file = new java.io.File(currentPath);
         String parent = file.getParent();
 
         if (parent != null) {
             requestPath(parent);
         } else {
-            requestPath(""); // Quay lại danh sách ổ đĩa
+            requestPath(""); // ve danh sach o dia
         }
     }
-
+    // xu ly su kien download file ve server
     @FXML
     public void onDownloadToServer() {
         FileNode selected = fileTable.getSelectionModel().getSelectedItem();
@@ -161,13 +148,11 @@ public class FileExplorerController {
                 alert.show();
             } else {
                 statusLabel.setText("Đang yêu cầu tải lên: " + selected.getName());
-                // Gửi lệnh yêu cầu Client Upload tệp này lên Server [cite: 104, 849]
                 commandService.sendSecure(clientId, "REQ_UPLOAD_FILE", selected.getPath());
             }
         }
     }
-
-    // Tiện ích định dạng kích thước file
+    // dinh dang kich thuoc file
     private String formatSize(long v) {
         if (v < 1024) return v + " B";
         int z = (63 - Long.numberOfLeadingZeros(v)) / 10;
